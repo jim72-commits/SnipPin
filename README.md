@@ -1,8 +1,8 @@
 # PinShot
 
-Lightweight always-on-top screenshot capture and annotation tool for Windows.
+Lightweight Windows screenshot pinning tool. Capture up to 10 screenshots and keep them floating above all other windows.
 
-PinShot lets you snip any rectangular region of your screen, pin it as a floating, resizable window, mark it up, and copy/save/extract text in one click. Designed for fast, focused capture-and-annotate workflows with a clean Scandinavian-inspired interface.
+PinShot is built for one focused job: quickly capture reference screenshots and keep them visible while you work. Snip any rectangular region, pin up to 10 resizable screenshots on top of every other window, then mark them up, copy, save, or extract text when needed.
 
 ---
 
@@ -12,7 +12,7 @@ PinShot lets you snip any rectangular region of your screen, pin it as a floatin
 
 ![PinShot hero screenshot](assets/hero.png)
 
-### Fast capture workflow
+### Capture and pin while you work
 
 ![PinShot capture workflow demo](assets/capture-workflow.gif)
 
@@ -39,6 +39,12 @@ Extract anywhere and double-click `PinShot.exe`. No installer. No admin rights. 
 ---
 
 ## Features
+
+### Core workflow
+- Capture up to **10 screenshots** at the same time
+- Every screenshot stays **floating above all other windows**
+- Resize each pinned screenshot freely
+- Close one screenshot or clear all pinned screenshots from the toolbar
 
 ### Capture
 - Drag-select any rectangular region across **all monitors** (full virtual desktop)
