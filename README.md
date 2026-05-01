@@ -159,14 +159,16 @@ pinshot/
 ├── build.bat             # One-shot build script
 ├── requirements.txt      # Pillow, PyInstaller, pystray, winrt-* (OCR)
 ├── README.md             # This file
-└── LICENSE               # MIT
+└── LICENSE               # Personal use only
 ```
 
 ---
 
 ## License
 
-[MIT](LICENSE) — free to use, modify, and redistribute. Provided as-is, no warranty.
+[Personal Use License](LICENSE) — free for personal use only. Resale,
+redistribution, repackaging, sublicensing, and commercial exploitation are not
+allowed without written permission from Jim. Provided as-is, no warranty.
 
 ---
 
