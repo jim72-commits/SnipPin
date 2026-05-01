@@ -980,20 +980,9 @@ class ScreenshotWindow(tk.Toplevel):
             x2 = int(s["p2"][0] * iw) + dx; y2 = int(s["p2"][1] * ih) + dy
             l_, t_ = min(x1, x2), min(y1, y2)
             r_, b_ = max(x1, x2), max(y1, y2)
-            # Draw a 60% black overlay across the whole image bounded by dx,dy,
-            # then carve out the rectangle by drawing a transparent rect on top.
-            # ImageDraw can't punch holes in a fill, so we draw 4 darkening
-            # rects around the spotlight. Bounds use the visible region.
-            bg = (0, 0, 0, 150)
-            # Top
-            draw.rectangle((dx, dy, dx + iw, t_), fill=bg)
-            # Bottom
-            draw.rectangle((dx, b_, dx + iw, dy + ih), fill=bg)
-            # Left
-            draw.rectangle((dx, t_, l_, b_), fill=bg)
-            # Right
-            draw.rectangle((r_, t_, dx + iw, b_), fill=bg)
-            # A subtle accent border around the spotlight rect
+            # The shared dimming layer is built once in _build_region so
+            # multiple spotlight selections remain clear at the same time.
+            # Individual spotlight strokes only draw their accent borders.
             draw.rectangle(
                 (l_, t_, r_, b_),
                 outline=(cr, cg, cb, 255), width=line_w,
@@ -1063,7 +1052,7 @@ class ScreenshotWindow(tk.Toplevel):
     def _build_region(self, bbox):
         """Rebuild the composite for `bbox` only and return an RGBA image."""
         _ensure_pil()
-        from PIL import ImageDraw
+        from PIL import Image, ImageDraw
         iw, ih = self.original_image.size
         l, t, r, b = bbox
         rw, rh = r - l, b - t
@@ -1091,7 +1080,30 @@ class ScreenshotWindow(tk.Toplevel):
                 blurred = _fast_blur(region, BLUR_RADIUS)
                 base.paste(blurred, (local[0], local[1]))
 
-        # 3. Render non-blur strokes onto a bbox-sized overlay
+        # 3. Apply all spotlight dimming as a single layer. If each spotlight
+        # drew its own dim overlay, later spotlights would darken earlier
+        # spotlight holes again. A shared alpha mask keeps any number of
+        # selected regions bright.
+        spotlights = [s for s in self._strokes if s["type"] == TOOL_SPOTLIGHT]
+        if spotlights:
+            alpha = Image.new("L", (rw, rh), 150)
+            alpha_draw = ImageDraw.Draw(alpha)
+            for s in spotlights:
+                x1 = int(s["p1"][0] * iw); y1 = int(s["p1"][1] * ih)
+                x2 = int(s["p2"][0] * iw); y2 = int(s["p2"][1] * ih)
+                sl, st_ = min(x1, x2), min(y1, y2)
+                sr, sb_ = max(x1, x2), max(y1, y2)
+                ll = max(sl, l); lt = max(st_, t)
+                lr = min(sr, r); lb = min(sb_, b)
+                if lr > ll and lb > lt:
+                    alpha_draw.rectangle(
+                        (ll - l, lt - t, lr - l, lb - t), fill=0,
+                    )
+            dim = Image.new("RGBA", (rw, rh), (0, 0, 0, 0))
+            dim.putalpha(alpha)
+            base = Image.alpha_composite(base, dim)
+
+        # 4. Render non-blur strokes and spotlight borders onto a bbox-sized overlay
         non_blur = [s for s in self._strokes if s["type"] != TOOL_BLUR]
         if non_blur:
             overlay = Image.new("RGBA", (rw, rh), (0, 0, 0, 0))
