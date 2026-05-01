@@ -159,6 +159,7 @@ pinshot/
 ├── build.bat             # One-shot build script
 ├── requirements.txt      # Pillow, PyInstaller, pystray, winrt-* (OCR)
 ├── README.md             # This file
+├── NOTICE                # Ownership/provenance signature
 └── LICENSE               # Personal use only
 ```
 
@@ -169,6 +170,9 @@ pinshot/
 [Personal Use License](LICENSE) — free for personal use only. Resale,
 redistribution, repackaging, sublicensing, and commercial exploitation are not
 allowed without written permission from Jim. Provided as-is, no warranty.
+
+Project signature for ownership/provenance: `PINSHOT-JIM-2026-PERSONAL-USE-7F3A9C2D`.
+See [`NOTICE`](NOTICE).
 
 ---
 

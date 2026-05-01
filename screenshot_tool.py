@@ -2,6 +2,7 @@
 PinShot v1.3 - lightweight floating screenshot tool for Windows.
 
 Provided by Jim | For Support, contact Jim
+Project signature: PINSHOT-JIM-2026-PERSONAL-USE-7F3A9C2D
 - Select a rectangular area on screen
 - Up to 10 floating, always-on-top, resizable screenshot windows
 - Markup: highlight, rect (filled or outline), ellipse, arrow, number,
@@ -31,6 +32,9 @@ from tkinter import colorchooser, filedialog, messagebox
 APP_NAME = "PinShot"
 APP_VERSION = "1.3"
 APP_AUTHOR = "Jim"
+APP_COPYRIGHT = "Copyright (c) 2026 Jim. All rights reserved."
+APP_PROVENANCE_ID = "PINSHOT-JIM-2026-PERSONAL-USE-7F3A9C2D"
+APP_REPOSITORY = "https://github.com/jim72-commits/PinShot"
 MAX_SCREENSHOTS = 10
 
 HIGHLIGHT_COLORS = [
@@ -2386,6 +2390,12 @@ class ScreenshotApp:
             font=("Segoe UI", 9), fg=SCAN_TEXT, bg=SCAN_BG,
             justify="left",
         ).pack(anchor="w", pady=(8, 14))
+        tk.Label(
+            inner,
+            text=f"{APP_COPYRIGHT}\nSignature: {APP_PROVENANCE_ID}",
+            font=("Segoe UI", 8), fg=SCAN_MUTED, bg=SCAN_BG,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 14))
         tk.Button(
             inner, text="Close", padx=18, pady=4, bd=0, relief=tk.FLAT,
             font=("Segoe UI", 9), bg=SCAN_ACCENT, fg=SCAN_ACCENT_FG,

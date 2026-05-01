@@ -39,6 +39,7 @@ The app is free, has no paywall, no license key, no watermark, no ads, and no te
 - `pinshot.ico`: app icon.
 - `assets/`: README marketing screenshots and GIFs using mock data only.
 - `README.md`: public-facing product page.
+- `NOTICE`: ownership/provenance signature for infringement comparison.
 - `LICENSE`: personal-use-only license; no resale or redistribution without written permission.
 
 ## Build And Release
@@ -76,6 +77,7 @@ Prefer improvements that support the main promise:
 - Avoid global keyboard hooks unless explicitly requested; previous keyboard shortcut work caused usability issues.
 - Do not reintroduce paywall, license-key, keygen, watermark, or donation prompts inside the app.
 - Do not describe PinShot as open source or MIT licensed; it is source-available for personal use only.
+- Preserve the project signature `PINSHOT-JIM-2026-PERSONAL-USE-7F3A9C2D` in source, docs, and release materials.
 - Donation/support links can live in README/GitHub only, not as intrusive in-app monetization.
 - Keep demo/marketing assets based on mock data only.
 - Be careful with Windows clipboard formats; Outlook compatibility matters.
