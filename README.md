@@ -6,6 +6,28 @@ PinShot is built for one focused job: quickly capture reference screenshots and 
 
 ---
 
+## Download The App
+
+### Click Here First
+
+**Download PinShot from GitHub Releases: [PinShot.zip](../../releases/latest)**
+
+Do **not** use the green **Code** button if you only want to run the app. The Code button downloads the source code for developers.
+
+### How To Install
+
+1. Open the [latest release page](../../releases/latest).
+2. Under **Assets**, download `PinShot.zip`.
+3. Extract the zip file anywhere on your computer.
+4. Open the extracted folder.
+5. Double-click `PinShot.exe`.
+
+No installer. No admin rights. No Python required.
+
+> On first launch, Windows SmartScreen may show "Unknown publisher" because this free release is currently unsigned. If you trust the GitHub download, click **More info** -> **Run anyway**.
+
+---
+
 ## Preview
 
 > Demo images use mock data only.
@@ -29,18 +51,6 @@ PinShot is built for one focused job: quickly capture reference screenshots and 
 ### Clipboard-ready screenshots
 
 ![PinShot clipboard demo](assets/clipboard-demo.gif)
-
----
-
-## Download
-
-**Latest release: [download `PinShot.zip` from Releases](../../releases/latest)**
-
-Extract anywhere and double-click `PinShot.exe`. No installer. No admin rights. No Python.
-
-> *On first launch, Windows SmartScreen may show "Unknown publisher" — click **More info → Run anyway**. The build is unsigned (it's a free hobby project) and reproducible from source.*
-
----
 
 ## Features
 
