@@ -6,6 +6,28 @@ PinShot lets you snip any rectangular region of your screen, pin it as a floatin
 
 ---
 
+## Preview
+
+> Demo images use mock data only.
+
+![PinShot hero screenshot](assets/hero.png)
+
+### Fast capture workflow
+
+![PinShot capture workflow demo](assets/capture-workflow.gif)
+
+### Markup and sharing
+
+| Annotation tools | OCR to clipboard |
+|---|---|
+| ![PinShot annotation tools](assets/annotation-tools.png) | ![PinShot OCR demo](assets/ocr-demo.png) |
+
+### Clipboard-ready screenshots
+
+![PinShot clipboard demo](assets/clipboard-demo.gif)
+
+---
+
 ## Download
 
 **Latest release: [download `PinShot.zip` from Releases](../../releases/latest)**
@@ -120,6 +142,7 @@ Output:
 
 ```
 pinshot/
+├── assets/               # README screenshots and short demo GIFs
 ├── screenshot_tool.py    # The whole app (single Python file)
 ├── pinshot.ico           # App icon
 ├── PinShot.spec          # PyInstaller build spec
