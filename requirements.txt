@@ -1,0 +1,8 @@
+Pillow
+pyinstaller
+pystray
+winrt-runtime
+winrt-Windows.Media.Ocr
+winrt-Windows.Graphics.Imaging
+winrt-Windows.Storage.Streams
+winrt-Windows.Foundation

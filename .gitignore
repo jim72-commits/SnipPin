@@ -1,0 +1,50 @@
+# PinShot - .gitignore
+# ----------------------------------------------------------------------
+# Build artefacts (PyInstaller)
+build/
+dist/
+*.spec.bak
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Editor / IDE noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Coverage / test outputs
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local logs / scratch / tmp
+*.log
+_out.txt
+_smoke*.py
+_test_*.py
+_uat*.py
+*.tmp
+
+# Local backups
+*_backup.py
+*_paywalled_backup.py
+
+# Distributable zip is published as a Release asset, not committed
+PinShot.zip
