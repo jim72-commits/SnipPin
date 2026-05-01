@@ -1,6 +1,6 @@
 # PinShot
 
-> **A lightweight, always-on-top screenshot tool for Windows. Free, no installer, no Python required.**
+Lightweight always-on-top screenshot capture and annotation tool for Windows.
 
 PinShot lets you snip any rectangular region of your screen, pin it as a floating, resizable window, mark it up, and copy/save/extract text in one click. Designed for fast, focused capture-and-annotate workflows with a clean Scandinavian-inspired interface.
 
