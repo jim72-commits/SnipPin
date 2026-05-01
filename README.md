@@ -22,6 +22,10 @@ PinShot is built for one focused job: quickly capture reference screenshots and 
 |---|---|
 | ![PinShot annotation tools](assets/annotation-tools.png) | ![PinShot OCR demo](assets/ocr-demo.png) |
 
+### Spotlight focus
+
+![PinShot Spotlight tool demo](assets/spotlight-demo.gif)
+
 ### Clipboard-ready screenshots
 
 ![PinShot clipboard demo](assets/clipboard-demo.gif)
