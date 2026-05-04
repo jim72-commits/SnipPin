@@ -44,6 +44,12 @@ HIGHLIGHT_COLORS = [
 ]
 HIGHLIGHT_WIDTH = 14
 HIGHLIGHT_ALPHA = 100  # 0-255
+HIGHLIGHT_SIZE_PRESETS = [
+    ("Small", 0.75),
+    ("Medium", 1.0),
+    ("Large", 1.35),
+]
+HIGHLIGHT_SIZE_DEFAULT = 1.0
 
 # Markup tools
 TOOL_HIGHLIGHT = "highlight"
@@ -90,9 +96,18 @@ NUMBER_SIZE_DEFAULT = 1.0
 
 # Text-tool sizing. Same auto-scale + cap pattern as the number tool so a
 # committed annotation does not balloon to 80+ px on a 4K screenshot.
-TEXT_FONT_BASE_PX = 18
-TEXT_FONT_MIN_PX = 12
-TEXT_FONT_MAX_PX = 28
+TEXT_FONT_BASE_PX = 14
+TEXT_FONT_MIN_PX = 10
+TEXT_FONT_MAX_PX = 20
+TEXT_SIZE_PRESETS = [
+    ("Small", 0.8),
+    ("Medium", 1.0),
+    ("Large", 1.25),
+]
+TEXT_SIZE_DEFAULT = 1.0
+
+# Spotlight borders should guide attention without becoming a heavy box.
+SPOTLIGHT_BORDER_WIDTH = 2
 
 # Selection-overlay magnifier loupe.
 # Odd LOUPE_SAMPLES so the cursor sits on a single, clearly identifiable
@@ -293,7 +308,9 @@ class Prefs:
         "last_delay_seconds": 0,
         "default_tool": TOOL_HIGHLIGHT,
         "default_color": "#FF0000",
+        "default_highlight_size": HIGHLIGHT_SIZE_DEFAULT,
         "default_number_size": NUMBER_SIZE_DEFAULT,
+        "default_text_size": TEXT_SIZE_DEFAULT,
         "toolbar_x": None,
         "toolbar_y": None,
         "first_run_complete": False,
@@ -746,6 +763,18 @@ class ScreenshotWindow(tk.Toplevel):
             )
         except (TypeError, ValueError):
             self._number_size_scale = NUMBER_SIZE_DEFAULT
+        try:
+            self._highlight_size_scale = float(
+                prefs.get("default_highlight_size") or HIGHLIGHT_SIZE_DEFAULT
+            )
+        except (TypeError, ValueError):
+            self._highlight_size_scale = HIGHLIGHT_SIZE_DEFAULT
+        try:
+            self._text_size_scale = float(
+                prefs.get("default_text_size") or TEXT_SIZE_DEFAULT
+            )
+        except (TypeError, ValueError):
+            self._text_size_scale = TEXT_SIZE_DEFAULT
         self._dpi_cache = None  # populated lazily by _window_dpi()
         self._drawing = False
         # Each stroke is a dict with a "type" key. See _composited_image for shape.
@@ -814,8 +843,49 @@ class ScreenshotWindow(tk.Toplevel):
 
         # Tool submenu (radio-buttoned for current tool)
         self._tool_var = tk.StringVar(value=self._tool)
+
+        # Highlight/Number/Text are grouped submenus. Choosing a size also
+        # selects that tool, so the user never has to choose tool + size
+        # separately.
+        self._highlight_size_var = tk.StringVar(value=str(self._highlight_size_scale))
+        highlight_menu = tk.Menu(self.ctx_menu, **menu_kwargs)
+        for label, scale in HIGHLIGHT_SIZE_PRESETS:
+            highlight_menu.add_radiobutton(
+                label=label, value=str(scale), variable=self._highlight_size_var,
+                command=lambda v=scale: self._set_highlight_size(v, select_tool=True),
+            )
+
+        # Number is a grouped submenu: first choose the Number tool, then pick
+        # its marker size from the same category.
+        self._num_size_var = tk.StringVar(value=str(self._number_size_scale))
+        number_menu = tk.Menu(self.ctx_menu, **menu_kwargs)
+        for label, scale in NUMBER_SIZE_PRESETS:
+            number_menu.add_radiobutton(
+                label=label, value=str(scale), variable=self._num_size_var,
+                command=lambda v=scale: self._set_number_size(v, select_tool=True),
+            )
+
+        # Text follows the same grouped pattern as Number: select the tool and
+        # adjust its size from one Text category.
+        self._text_size_var = tk.StringVar(value=str(self._text_size_scale))
+        text_menu = tk.Menu(self.ctx_menu, **menu_kwargs)
+        for label, scale in TEXT_SIZE_PRESETS:
+            text_menu.add_radiobutton(
+                label=label, value=str(scale), variable=self._text_size_var,
+                command=lambda v=scale: self._set_text_size(v, select_tool=True),
+            )
+
         tool_menu = tk.Menu(self.ctx_menu, **menu_kwargs)
         for tool_id, label in TOOLS:
+            if tool_id == TOOL_HIGHLIGHT:
+                tool_menu.add_cascade(label="Highlight", menu=highlight_menu)
+                continue
+            if tool_id == TOOL_NUMBER:
+                tool_menu.add_cascade(label="Number", menu=number_menu)
+                continue
+            if tool_id == TOOL_TEXT:
+                tool_menu.add_cascade(label="Text", menu=text_menu)
+                continue
             tool_menu.add_radiobutton(
                 label=label, value=tool_id, variable=self._tool_var,
                 command=lambda t=tool_id: self._set_tool(t),
@@ -836,17 +906,6 @@ class ScreenshotWindow(tk.Toplevel):
         color_menu.add_command(label="Custom...", command=self._choose_color)
         self.ctx_menu.add_cascade(label="Color", menu=color_menu)
 
-        # Number Size submenu - lets the user override the auto-scaled
-        # marker radius. Applies to all numbers in this screenshot.
-        self._num_size_var = tk.StringVar(value=str(self._number_size_scale))
-        num_size_menu = tk.Menu(self.ctx_menu, **menu_kwargs)
-        for label, scale in NUMBER_SIZE_PRESETS:
-            num_size_menu.add_radiobutton(
-                label=label, value=str(scale), variable=self._num_size_var,
-                command=lambda v=scale: self._set_number_size(v),
-            )
-        self.ctx_menu.add_cascade(label="Number Size", menu=num_size_menu)
-
         self.ctx_menu.add_command(
             label="Undo", accelerator="Ctrl+Z", command=self._undo_stroke,
         )
@@ -864,7 +923,7 @@ class ScreenshotWindow(tk.Toplevel):
                 return None
             xs = [int(xf * iw) for xf, _ in pts]
             ys = [int(yf * ih) for _, yf in pts]
-            margin = max(2, int(HIGHLIGHT_WIDTH * iw / 800)) // 2 + 2
+            margin = self._highlight_width(iw) // 2 + 2
             return (min(xs) - margin, min(ys) - margin,
                     max(xs) + margin + 1, max(ys) + margin + 1)
         if stype in (
@@ -985,7 +1044,7 @@ class ScreenshotWindow(tk.Toplevel):
             # Individual spotlight strokes only draw their accent borders.
             draw.rectangle(
                 (l_, t_, r_, b_),
-                outline=(cr, cg, cb, 255), width=line_w,
+                outline=(cr, cg, cb, 255), width=SPOTLIGHT_BORDER_WIDTH,
             )
 
     def _window_dpi(self):
@@ -1023,15 +1082,21 @@ class ScreenshotWindow(tk.Toplevel):
     def _text_font_size(self, iw):
         """Capped text font size (image pixels). Used both for the rendered
         annotation and for sizing the inline Entry preview."""
-        auto = max(
+        auto = int(round(max(
             TEXT_FONT_MIN_PX,
             min(TEXT_FONT_MAX_PX, int(TEXT_FONT_BASE_PX * iw / 800)),
-        )
+        ) * self._text_size_scale))
+        auto = max(TEXT_FONT_MIN_PX, min(TEXT_FONT_MAX_PX, auto))
         return auto
+
+    def _highlight_width(self, width_px):
+        """Highlight stroke width for an image/canvas of `width_px` pixels."""
+        base = max(2, int(HIGHLIGHT_WIDTH * width_px / 800))
+        return max(2, int(round(base * self._highlight_size_scale)))
 
     def _stroke_metrics(self, iw, ih):
         """Per-image-size brush metrics + a cached bold font."""
-        stroke_w = max(2, int(HIGHLIGHT_WIDTH * iw / 800))
+        stroke_w = self._highlight_width(iw)
         line_w = max(2, int(4 * iw / 800))
         number_radius = self._number_radius(iw)
         num_font = _font_with_fallback(
@@ -1219,7 +1284,7 @@ class ScreenshotWindow(tk.Toplevel):
                 # Preview width must match the rendered width or the indicator
                 # 'lies' to the user. Rendered width on-screen scales with the
                 # canvas (HIGHLIGHT_WIDTH is calibrated at 800-px canvas width).
-                preview_w = max(2, int(HIGHLIGHT_WIDTH * cw / 800))
+                preview_w = self._highlight_width(cw)
                 self.canvas.create_line(
                     p1[0] * cw, p1[1] * ch, p2[0] * cw, p2[1] * ch,
                     fill=self._draw_color, width=preview_w,
@@ -1413,12 +1478,32 @@ class ScreenshotWindow(tk.Toplevel):
         self._draw_color = color
         prefs.set("default_color", color)
 
-    def _set_number_size(self, scale):
+    def _set_highlight_size(self, scale, select_tool=False):
+        """Update highlight stroke width and re-render existing highlights."""
+        if select_tool:
+            self._set_tool(TOOL_HIGHLIGHT)
+        self._highlight_size_scale = float(scale)
+        prefs.set("default_highlight_size", float(scale))
+        if any(s["type"] == TOOL_HIGHLIGHT for s in self._strokes):
+            self._refresh()
+
+    def _set_number_size(self, scale, select_tool=False):
         """Update the marker scale for THIS window and re-render existing
         numbers. Persisted so future captures reuse the choice."""
+        if select_tool:
+            self._set_tool(TOOL_NUMBER)
         self._number_size_scale = float(scale)
         prefs.set("default_number_size", float(scale))
         if any(s["type"] == TOOL_NUMBER for s in self._strokes):
+            self._refresh()
+
+    def _set_text_size(self, scale, select_tool=False):
+        """Update the text scale and re-render existing text annotations."""
+        if select_tool:
+            self._set_tool(TOOL_TEXT)
+        self._text_size_scale = float(scale)
+        prefs.set("default_text_size", float(scale))
+        if any(s["type"] == TOOL_TEXT for s in self._strokes):
             self._refresh()
 
     def _choose_color(self):
