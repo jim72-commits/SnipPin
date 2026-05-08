@@ -36,14 +36,17 @@ APP_COPYRIGHT = "Copyright (c) 2026 Jim. All rights reserved."
 APP_PROVENANCE_ID = "PINSHOT-JIM-2026-PERSONAL-USE-7F3A9C2D"
 APP_REPOSITORY = "https://github.com/jim72-commits/PinShot"
 MAX_SCREENSHOTS = 10
+GIF_RECORD_SECONDS = 10
+GIF_RECORD_FPS = 8
+GIF_MAX_WIDTH = 900
 
 HIGHLIGHT_COLORS = [
-    ("#FFFF00", "Yellow"),
-    ("#FF0000", "Red"),
-    ("#00FF00", "Green"),
+    ("#F7D774", "Yellow"),
+    ("#F28482", "Red"),
+    ("#74C69D", "Green"),
 ]
 HIGHLIGHT_WIDTH = 14
-HIGHLIGHT_ALPHA = 100  # 0-255
+HIGHLIGHT_ALPHA = 92  # 0-255; soft enough for document-style markup
 HIGHLIGHT_SIZE_PRESETS = [
     ("Small", 0.75),
     ("Medium", 1.0),
@@ -129,6 +132,8 @@ SCAN_ACCENT_FG = "#FFFFFF"     # white text on accent
 SCAN_BTN_BG = "#FFFFFF"        # clean white (used for dropdown surface)
 SCAN_BTN_HOVER = "#EFEDE5"     # subtle warm hover
 SCAN_DANGER = "#C25450"        # muted brick red
+SCAN_BADGE_BG = "#EEF3F8"      # tiny status badge background
+SCAN_SHADOW = "#E8E3D8"        # soft outer frame shade
 
 
 # ---------------------------------------------------------------------------
@@ -635,6 +640,8 @@ _U32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
 _U32.SetClipboardData.restype = ctypes.c_void_p
 _U32.RegisterClipboardFormatW.argtypes = [ctypes.c_wchar_p]
 _U32.RegisterClipboardFormatW.restype = ctypes.c_uint
+_U32.GetCursorPos.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
+_U32.GetCursorPos.restype = ctypes.c_int
 
 _CF_DIB = 8
 _GMEM_MOVEABLE = 0x0002
@@ -737,6 +744,34 @@ def _copy_image_to_clipboard(pil_img):
         _U32.CloseClipboard()
 
 
+def _cursor_position():
+    """Current cursor position in virtual-screen coordinates."""
+    pt = ctypes.wintypes.POINT()
+    if _U32.GetCursorPos(ctypes.byref(pt)):
+        return int(pt.x), int(pt.y)
+    return None
+
+
+def _draw_cursor_overlay(img, x, y, scale=1.0):
+    """Draw a readable pointer marker because ImageGrab omits hardware cursor."""
+    from PIL import ImageDraw
+    if x < 0 or y < 0 or x >= img.width or y >= img.height:
+        return
+    draw = ImageDraw.Draw(img)
+    s = max(0.75, float(scale))
+    pts = [
+        (x, y),
+        (x + int(14 * s), y + int(32 * s)),
+        (x + int(5 * s), y + int(28 * s)),
+        (x + int(1 * s), y + int(42 * s)),
+        (x - int(4 * s), y + int(40 * s)),
+        (x, y + int(27 * s)),
+        (x - int(9 * s), y + int(33 * s)),
+    ]
+    draw.polygon(pts, fill=(255, 255, 255), outline=(31, 41, 55))
+    draw.line(pts + [pts[0]], fill=(31, 41, 55), width=max(1, int(2 * s)))
+
+
 # ---------------------------------------------------------------------------
 # Screenshot window
 # ---------------------------------------------------------------------------
@@ -807,7 +842,10 @@ class ScreenshotWindow(tk.Toplevel):
             cw = max(120, int(cw * scale))
             ch = max(80, int(ch * scale))
 
-        self.canvas = tk.Canvas(self, highlightthickness=0, width=cw, height=ch)
+        self.canvas = tk.Canvas(
+            self, highlightthickness=1, highlightbackground=SCAN_BORDER,
+            highlightcolor=SCAN_ACCENT, bd=0, width=cw, height=ch,
+        )
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         self.canvas.bind("<Configure>", self._on_resize)
@@ -834,11 +872,9 @@ class ScreenshotWindow(tk.Toplevel):
             bd=1, relief=tk.FLAT, font=("Segoe UI", 9),
         )
         self.ctx_menu = tk.Menu(self, **menu_kwargs)
-        self.ctx_menu.add_command(label="Copy to Clipboard", command=self._copy_to_clipboard)
-        self.ctx_menu.add_command(label="Grab Text", command=self._grab_text)
+        self.ctx_menu.add_command(label="Copy", command=self._copy_to_clipboard)
         self.ctx_menu.add_command(label="Save As...", command=self._save_as)
-        self.ctx_menu.add_command(label="Pick Color at Cursor", command=self._pick_color_at_cursor)
-        self.ctx_menu.add_command(label="Magnify Region", command=self._open_magnifier)
+        self.ctx_menu.add_command(label="Grab Text (OCR)", command=self._grab_text)
         self.ctx_menu.add_separator()
 
         # Tool submenu (radio-buttoned for current tool)
@@ -906,10 +942,14 @@ class ScreenshotWindow(tk.Toplevel):
         color_menu.add_command(label="Custom...", command=self._choose_color)
         self.ctx_menu.add_cascade(label="Color", menu=color_menu)
 
+        self.ctx_menu.add_separator()
+        self.ctx_menu.add_command(label="Pick Color", command=self._pick_color_at_cursor)
+        self.ctx_menu.add_command(label="Magnify", command=self._open_magnifier)
+        self.ctx_menu.add_separator()
         self.ctx_menu.add_command(
             label="Undo", accelerator="Ctrl+Z", command=self._undo_stroke,
         )
-        self.ctx_menu.add_command(label="Clear All", command=self._clear_strokes)
+        self.ctx_menu.add_command(label="Clear Markup", command=self._clear_strokes)
         self.ctx_menu.add_separator()
         self.ctx_menu.add_command(label="Close", command=self._close)
 
@@ -1242,6 +1282,24 @@ class ScreenshotWindow(tk.Toplevel):
         self._photo = ImageTk.PhotoImage(resized)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self._photo)
+        self._draw_index_badge(w)
+
+    def _draw_index_badge(self, canvas_w):
+        """Tiny unobtrusive corner badge for identifying pinned screenshots."""
+        label = f"#{self.index}"
+        x1, y1 = 8, 8
+        x2 = min(canvas_w - 8, 42)
+        if x2 <= x1 + 10:
+            return
+        self.canvas.create_rectangle(
+            x1, y1, x2, y1 + 20,
+            fill=SCAN_BADGE_BG, outline=SCAN_BORDER, tags="badge",
+        )
+        self.canvas.create_text(
+            (x1 + x2) // 2, y1 + 10,
+            text=label, fill=SCAN_TEXT, font=("Segoe UI Semibold", 8),
+            tags="badge",
+        )
 
     def _on_resize(self, _event):
         """Coalesce rapid resize events into a single redraw."""
@@ -2238,6 +2296,8 @@ class ScreenshotApp:
         self._delay_menu_visible = False
         self._delay_menu_close_time = 0.0  # set when menu was dismissed by clicking the button
         self._cached_hwnd = None  # populated lazily by _get_hwnd
+        self._gif_record_path = None
+        self._recording_win = None
 
         self._build_toolbar()
         self._force_topmost()
@@ -2251,10 +2311,11 @@ class ScreenshotApp:
 
     # ------- UI construction -------
     def _build_toolbar(self):
-        # Hairline 1-px border around the toolbar
-        border_wrap = tk.Frame(self.root, bg=SCAN_BORDER)
+        # Soft framed capsule-style toolbar. Tkinter cannot do true rounded
+        # corners without custom drawing, so we keep the surface flat and calm.
+        border_wrap = tk.Frame(self.root, bg=SCAN_SHADOW)
         border_wrap.pack(fill=tk.BOTH, expand=True)
-        bar = tk.Frame(border_wrap, bg=SCAN_BG, padx=6, pady=3)
+        bar = tk.Frame(border_wrap, bg=SCAN_BG, padx=7, pady=4)
         bar.pack(fill=tk.X, padx=1, pady=1)
         bar.bind("<ButtonPress-1>", self._on_drag_start)
         bar.bind("<B1-Motion>", self._on_drag_move)
@@ -2278,8 +2339,8 @@ class ScreenshotApp:
 
         # Primary action: Capture (only persistent accent in the toolbar)
         self.capture_btn = tk.Button(
-            bar, text="Capture", pady=2, padx=10, bd=0,
-            font=("Segoe UI", 9), command=self._start_capture,
+            bar, text="Capture", pady=2, padx=12, bd=0,
+            font=("Segoe UI Semibold", 9), command=self._start_capture,
             relief=tk.FLAT, bg=SCAN_ACCENT, fg=SCAN_ACCENT_FG,
             activebackground=SCAN_ACCENT_HOVER, activeforeground=SCAN_ACCENT_FG,
             cursor="hand2",
@@ -2291,6 +2352,24 @@ class ScreenshotApp:
         self._capture_tooltip = Tooltip(
             self.capture_btn, "Capture a region of the screen  \u2013  0 / 10",
         )
+
+        self._count_label = tk.Label(
+            bar, text=f"0/{MAX_SCREENSHOTS}",
+            font=("Segoe UI", 8), fg=SCAN_MUTED, bg=SCAN_BADGE_BG,
+            padx=5, pady=1,
+        )
+        self._count_label.pack(side=tk.LEFT, padx=(1, 5))
+
+        self.gif_btn = tk.Button(
+            bar, text="GIF", pady=2, padx=8, bd=0,
+            font=("Segoe UI", 9), command=self._start_gif_recording,
+            relief=tk.FLAT, bg=SCAN_BG, fg=SCAN_TEXT,
+            activebackground=SCAN_BTN_HOVER, activeforeground=SCAN_TEXT,
+            cursor="hand2",
+        )
+        self.gif_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self._bind_hover(self.gif_btn, SCAN_BG, SCAN_BTN_HOVER)
+        Tooltip(self.gif_btn, "Record selected area as a 10-second GIF")
 
         # Delay menu - click-to-toggle dropdown. Restore saved default delay.
         saved_delay = int(prefs.get("last_delay_seconds") or 0)
@@ -2305,7 +2384,7 @@ class ScreenshotApp:
             activebackground=SCAN_BTN_HOVER, activeforeground=SCAN_TEXT,
             cursor="hand2", command=self._toggle_delay_menu,
         )
-        self._delay_btn.pack(side=tk.LEFT, padx=(0, 3))
+        self._delay_btn.pack(side=tk.LEFT, padx=(0, 4))
         self._bind_hover(self._delay_btn, SCAN_BG, SCAN_BTN_HOVER)
 
         self._delay_menu = tk.Menu(
@@ -2322,7 +2401,7 @@ class ScreenshotApp:
 
         # Close All
         close_all_btn = tk.Button(
-            bar, text="Close All", pady=2, padx=10, bd=0,
+            bar, text="Clear", pady=2, padx=8, bd=0,
             font=("Segoe UI", 9), command=self._close_all,
             relief=tk.FLAT, bg=SCAN_BG, fg=SCAN_TEXT,
             activebackground=SCAN_BTN_HOVER, activeforeground=SCAN_TEXT,
@@ -2524,9 +2603,9 @@ class ScreenshotApp:
         tk.Label(
             inner,
             text=(
-                "  - Click 'Capture' to grab a region of the screen\n"
-                "  - Right-click any pinned screenshot to mark it up\n"
-                "  - Drag the toolbar to reposition it - PinShot remembers it"
+                "1. Capture a region of your screen\n"
+                "2. Keep up to 10 screenshots floating above other windows\n"
+                "3. Right-click a screenshot to annotate, copy, save, or OCR"
             ),
             font=("Segoe UI", 9), fg=SCAN_TEXT, bg=SCAN_BG,
             justify="left", anchor="w",
@@ -2573,6 +2652,9 @@ class ScreenshotApp:
                 "Capture", lambda: self.root.after(0, self._start_capture)
             ),
             pystray.MenuItem(
+                "Record GIF", lambda: self.root.after(0, self._start_gif_recording)
+            ),
+            pystray.MenuItem(
                 "Show PinShot",
                 lambda: self.root.after(0, self._restore_from_tray),
                 default=True,
@@ -2598,8 +2680,9 @@ class ScreenshotApp:
         self.capture_btn.config(
             state=tk.NORMAL if count < MAX_SCREENSHOTS else tk.DISABLED
         )
-        # Count is shown via the Capture-button tooltip rather than a
-        # standalone "0 / 10" label - keeps the toolbar compact.
+        self._count_label.config(text=f"{count}/{MAX_SCREENSHOTS}")
+        if hasattr(self, "gif_btn"):
+            self.gif_btn.config(state=tk.NORMAL if not self._counting_down else tk.DISABLED)
         self._capture_tooltip.text = (
             f"Capture a region of the screen  \u2013  {count} / {MAX_SCREENSHOTS}"
         )
@@ -2646,6 +2729,22 @@ class ScreenshotApp:
             pass
 
     # ------- capture flow -------
+    def _start_gif_recording(self):
+        initial_dir = prefs.get("last_save_dir") or ""
+        path = filedialog.asksaveasfilename(
+            parent=self.root, title="Save 10-second GIF",
+            defaultextension=".gif",
+            initialdir=initial_dir if initial_dir and os.path.isdir(initial_dir) else None,
+            filetypes=[("GIF Animation", "*.gif"), ("All Files", "*.*")],
+        )
+        if not path:
+            return
+        prefs.set("last_save_dir", os.path.dirname(path))
+        self._gif_record_path = path
+        if not self._in_tray:
+            self.root.withdraw()
+        self.root.after(300, self._show_gif_overlay)
+
     def _start_capture(self):
         if len(self.screenshots) >= MAX_SCREENSHOTS:
             messagebox.showwarning(
@@ -2661,6 +2760,18 @@ class ScreenshotApp:
             if not self._in_tray:
                 self.root.withdraw()
             self.root.after(300, self._show_overlay)
+
+    def _show_gif_overlay(self):
+        SelectionOverlay(
+            self.root, self._do_record_gif, self._on_gif_record_cancel,
+            freeze_image=None,
+        )
+
+    def _on_gif_record_cancel(self):
+        self._gif_record_path = None
+        if not self._in_tray:
+            self.root.deiconify()
+            self._force_topmost()
 
     def _start_countdown(self, seconds):
         self._counting_down = True
@@ -2763,6 +2874,131 @@ class ScreenshotApp:
         self.screenshots.append(win)
         self._update_status()
         win._copy_to_clipboard()
+
+    def _do_record_gif(self, x1, y1, x2, y2):
+        path = self._gif_record_path
+        self._gif_record_path = None
+        if not path:
+            self._on_gif_record_cancel()
+            return
+        self._show_recording_status(x1, y1, x2, y2)
+        threading.Thread(
+            target=self._gif_record_worker,
+            args=(path, int(x1), int(y1), int(x2), int(y2)),
+            daemon=True,
+        ).start()
+
+    def _show_recording_status(self, x1, y1, x2, y2):
+        self._hide_recording_status()
+        win = tk.Toplevel(self.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.configure(bg=SCAN_BORDER)
+        inner = tk.Frame(win, bg=SCAN_BG, padx=12, pady=7)
+        inner.pack(padx=1, pady=1)
+        self._recording_label = tk.Label(
+            inner, text=f"Recording GIF 0/{GIF_RECORD_SECONDS}s",
+            font=("Segoe UI Semibold", 9), fg=SCAN_TEXT, bg=SCAN_BG,
+        )
+        self._recording_label.pack()
+        win.update_idletasks()
+
+        ww = win.winfo_reqwidth()
+        wh = win.winfo_reqheight()
+        vx, vy, vw, vh = _virtual_screen_rect()
+        # Prefer just above the selected area, then below it, then top-right.
+        px = max(vx + 10, min(int(x1), vx + vw - ww - 10))
+        py = int(y1) - wh - 12
+        if py < vy + 10:
+            py = int(y2) + 12
+        if py + wh > vy + vh - 10:
+            px = vx + vw - ww - 20
+            py = vy + 20
+        win.geometry(f"+{px}+{py}")
+        self._recording_win = win
+
+    def _update_recording_status(self, seconds_done):
+        if self._recording_win is not None and self._recording_win.winfo_exists():
+            self._recording_label.config(
+                text=f"Recording GIF {seconds_done}/{GIF_RECORD_SECONDS}s"
+            )
+
+    def _hide_recording_status(self):
+        if self._recording_win is not None:
+            try:
+                self._recording_win.destroy()
+            except Exception:
+                pass
+            self._recording_win = None
+
+    def _gif_record_worker(self, path, x1, y1, x2, y2):
+        _ensure_pil()
+        frames = []
+        frame_interval = 1.0 / GIF_RECORD_FPS
+        total_frames = GIF_RECORD_SECONDS * GIF_RECORD_FPS
+        try:
+            start = time.perf_counter()
+            for i in range(total_frames):
+                target_time = start + i * frame_interval
+                now = time.perf_counter()
+                if target_time > now:
+                    time.sleep(target_time - now)
+                frame = ImageGrab.grab(bbox=(x1, y1, x2, y2), all_screens=True).convert("RGB")
+                cursor = _cursor_position()
+                cursor_scale = 1.0
+                if frame.width > GIF_MAX_WIDTH:
+                    scale = GIF_MAX_WIDTH / frame.width
+                    new_size = (GIF_MAX_WIDTH, max(1, int(frame.height * scale)))
+                    frame = frame.resize(new_size, Image.LANCZOS)
+                    cursor_scale = scale
+                if cursor is not None:
+                    cx, cy = cursor
+                    local_x = int((cx - x1) * cursor_scale)
+                    local_y = int((cy - y1) * cursor_scale)
+                    _draw_cursor_overlay(frame, local_x, local_y, cursor_scale)
+                frames.append(frame)
+                seconds_done = min(GIF_RECORD_SECONDS, int((i + 1) / GIF_RECORD_FPS))
+                if (i + 1) % GIF_RECORD_FPS == 0:
+                    self.root.after(0, lambda s=seconds_done: self._update_recording_status(s))
+
+            if not frames:
+                raise RuntimeError("No frames captured.")
+            duration_ms = int(1000 / GIF_RECORD_FPS)
+            frames[0].save(
+                path,
+                save_all=True,
+                append_images=frames[1:],
+                duration=duration_ms,
+                loop=0,
+                optimize=True,
+            )
+            self.root.after(0, lambda: self._on_gif_record_done(path))
+        except Exception as e:
+            err = str(e)
+            self.root.after(0, lambda: self._on_gif_record_error(err))
+
+    def _on_gif_record_done(self, path):
+        self._hide_recording_status()
+        if not self._in_tray:
+            self.root.deiconify()
+            self._force_topmost()
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(path)
+        except Exception:
+            pass
+        messagebox.showinfo(
+            "GIF Saved",
+            f"Saved 10-second GIF:\n{path}\n\nThe file path was copied to clipboard.",
+            parent=self.root,
+        )
+
+    def _on_gif_record_error(self, error):
+        self._hide_recording_status()
+        if not self._in_tray:
+            self.root.deiconify()
+            self._force_topmost()
+        messagebox.showerror("GIF Recording Error", error, parent=self.root)
 
     def _on_screenshot_close(self, win: ScreenshotWindow):
         if win in self.screenshots:
